@@ -1,0 +1,8 @@
+{application, pg_graph_dump, [
+  {description, "PostgreSQL Dependency Graph Dump"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [kernel, stdlib]},
+  {mod, {pg_graph_dump, []}},
+  {env, []}
+]}.
