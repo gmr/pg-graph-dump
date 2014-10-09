@@ -5,9 +5,9 @@
 %%=============================================================================
 -module(pg_graph_dump).
 
--export([main/1]).
+-export([main/1, on_error/1]).
 
--include_lib("deps/epgsql/include/pgsql.hrl").
+-include("include/pg_graph_dump.hrl").
 
 %% Command line argument specification
 -define(SPEC,
@@ -18,6 +18,7 @@
          {no_pwd_prompt, $w, "no-password",  boolean,                   "never prompt for password"},
          {pwd_prompt,    $W, "password",     boolean,                   "force password prompt (should happen automatically)"},
          {help,          $h, "help",         boolean,                   "display this help and exit"}]).
+
 
 %% @spec main(Args)
 %% @where
@@ -42,6 +43,17 @@ main(Args) ->
  end.
 
 
+%% @spec on_error(Msg)
+%% @where
+%%       Msg = atom()
+%% @doc Display an error message and exit in an error state
+%% @end
+%%
+on_error(Msg) ->
+  io:format("ERROR: " ++ atom_to_list(Msg) ++ "~n"),
+  erlang:halt(1).
+
+
 %% @private
 %% @spec usage(ExitCode)
 %% @where
@@ -56,18 +68,6 @@ usage(ExitCode) ->
     _ -> ok
   end,
   erlang:halt(ExitCode).
-
-
-%% @private
-%% @spec on_error(Msg)
-%% @where
-%%       Msg = atom()
-%% @doc Display an error message and exit in an error state
-%% @end
-%%
-on_error(Msg) ->
-  io:format("ERROR: " ++ atom_to_list(Msg) ++ "~n"),
-  erlang:halt(1).
 
 
 %% @private
@@ -90,7 +90,12 @@ process(Opts) ->
     false ->
       connect(Host, Port, DBName, User, proplists:get_bool(no_pwd_prompt, Opts))
   end,
-  io:format("Connected: ~p~n", [Conn]).
+
+  State1 = #state{connection=Conn,
+                  graph=digraph:new(),
+                  version=pg_graph_db:version(Conn)},
+  State2 = pg_graph_db:build_graph(State1),
+  io:format("Sorted: ~p~n", [digraph_utils:postorder(State2#state.graph)]).
 
 
 %% @private
