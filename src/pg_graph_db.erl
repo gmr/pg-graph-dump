@@ -15,11 +15,11 @@
 
 build_graph(State) ->
   State1 = State#state{roles=roles(State)},
-  graph_roles(State1#state.graph, State1#state.roles),
+  pg_graph_build:roles(State1#state.graph, State1#state.roles),
   State2 = State1#state{namespaces=namespaces(State1)},
-  graph_namespaces(State2#state.graph, State2#state.namespaces),
+  pg_graph_build:namespaces(State2#state.graph, State2#state.namespaces),
   State3 = State2#state{tables=tables(State2)},
-  graph_tables(State3#state.graph, State3#state.tables),
+  pg_graph_build:tables(State3#state.graph, State3#state.tables),
   State3.
 
 
@@ -34,58 +34,17 @@ version(Connection) ->
 %% Private Functions
 %% -----------------------------------------------------------------------------
 
-
-graph_add_namespace(Graph, Namespace) ->
-  digraph:add_vertex(Graph, {namespace, Namespace#pg_namespace.name}),
-  graph_role_edge(Graph, {namespace, Namespace#pg_namespace.name}, Namespace#pg_namespace.owner),
-  lists:foreach(fun(A) -> graph_role_edge(Graph, {namespace, Namespace#pg_namespace.name}, A#pg_acl.role) end,
-                Namespace#pg_namespace.acls).
-
-
-graph_namespaces(Graph, Namespaces) ->
-  lists:foreach(fun(Namespace) ->  graph_add_namespace(Graph, Namespace) end, Namespaces).
-
-
-graph_role_edge(Graph, Edge, Role) ->
-  case Role of
-    null  -> ok;
-    Value -> digraph:add_edge(Graph, Edge, {role, Value})
-  end.
-
-
-graph_roles(Graph, Roles) ->
-  lists:foreach(fun(V) -> digraph:add_vertex(Graph, {role, V#pg_role.name}) end, Roles).
-
-
-graph_tables(Graph, Tables) ->
-  lists:foreach(fun(T) -> graph_table(Graph, T) end, Tables).
-
-
-graph_table(Graph, Table) ->
-  digraph:add_vertex(Graph, {table, Table#pg_table.namespace, Table#pg_table.name}),
-  digraph:add_edge(Graph,
-                   {table, Table#pg_table.namespace, Table#pg_table.name},
-                   {namespace, Table#pg_table.namespace}),
-  digraph:add_edge(Graph,
-                   {table, Table#pg_table.namespace, Table#pg_table.name},
-                   {role, Table#pg_table.owner}),
-  lists:foreach(fun(A) -> graph_role_edge(Graph,
-                                          {table, Table#pg_table.namespace, Table#pg_table.name},
-                                          A#pg_acl.role) end,
-                Table#pg_table.acls).
-
-
 role({Name, SuperUser, Inherit, CreateRole, CreateDB, CatalogUpdate, CanLogin, Replication, ConnLimit, Password, ValidUntil, Config, Oid}) ->
-  #pg_role{name=bin_to_list(Name),
-           super_user=bool(SuperUser),
-           inherit=bool(Inherit),
-           create_role=bool(CreateRole),
-           create_db=bool(CreateDB),
-           catalog_update=bool(CatalogUpdate),
-           can_login=bool(CanLogin),
-           replication=bool(Replication),
+  #pg_role{name=pg_graph_util:bin_to_list(Name),
+           super_user=pg_graph_util:bool(SuperUser),
+           inherit=pg_graph_util:bool(Inherit),
+           create_role=pg_graph_util:bool(CreateRole),
+           create_db=pg_graph_util:bool(CreateDB),
+           catalog_update=pg_graph_util:bool(CatalogUpdate),
+           can_login=pg_graph_util:bool(CanLogin),
+           replication=pg_graph_util:bool(Replication),
            conn_limit=binary_to_integer(ConnLimit),
-           password=bin_to_list(Password),
+           password=pg_graph_util:bin_to_list(Password),
            valid_until=ValidUntil,
            config=Config,
            oid=binary_to_integer(Oid)}.
@@ -113,9 +72,9 @@ roles(#state{connection=Connection, version=Version}) ->
 
 
 namespace(State, {Name, Owner, ACL, Oid}) ->
-  #pg_namespace{name=bin_to_list(Name),
+  #pg_namespace{name=pg_graph_util:bin_to_list(Name),
                 owner=role_name(State, binary_to_integer(Owner)),
-                acls=parse_acls(bin_to_list(ACL)),
+                acls=pg_graph_util:parse_acls(pg_graph_util:bin_to_list(ACL)),
                 oid=binary_to_integer(Oid)}.
 
 
@@ -131,11 +90,11 @@ namespaces(#state{connection=Connection, roles=Roles}) ->
 
 table(State, Namespace, {Name, Owner, ACL, Options, Oid}) ->
   Role = role_name(State#state.roles, Owner),
-  #pg_table{name=bin_to_list(Name),
+  #pg_table{name=pg_graph_util:bin_to_list(Name),
             namespace=Namespace#pg_namespace.name,
             owner=role_name(State#state.roles, binary_to_integer(Role)),
-            acls=parse_acls(bin_to_list(ACL)),
-            options=bin_to_list(Options),
+            acls=pg_graph_util:parse_acls(pg_graph_util:bin_to_list(ACL)),
+            options=pg_graph_util:bin_to_list(Options),
             oid=binary_to_integer(Oid)}.
 
 
@@ -154,56 +113,3 @@ tables(State, Namespace) ->
       error
   end.
 
-
-bin_to_list(Value) ->
-  case Value of
-    null -> null;
-    Bin -> binary_to_list(Bin)
-  end.
-
-
-bool(Value) ->
-  case Value of
-    <<"t">> -> true;
-    "t"     -> true;
-    <<"f">> -> false;
-    "f"     -> false;
-    null    -> null
-  end.
-
-
-create_acl(ACL) ->
-  case string:tokens(ACL, "/=") of
-    [Values, GrantedBy] -> create_acl(null, Values, GrantedBy);
-    [Role, Values, GrantedBy] -> create_acl(Role, Values, GrantedBy)
-  end.
-
-
-create_acl(Role, Values, GrantedBy) ->
-  #pg_acl{role=Role,
-          granted_by=GrantedBy,
-          select=has_permission($r, Values),
-          usage=has_permission($U, Values),
-          insert=has_permission($a, Values),
-          update=has_permission($w, Values),
-          delete=has_permission($d, Values),
-          trigger=has_permission($t, Values),
-          truncate=has_permission($D, Values),
-          references=has_permission($x, Values),
-          execute=has_permission($X, Values),
-          create=has_permission($C, Values),
-          connect=has_permission($c, Values),
-          temporary=has_permission($T, Values)}.
-
-
-has_permission(B, Bytes) ->
-  lists:any(fun(C) -> B == C end, Bytes).
-
-
-parse_acls(ACLs) ->
-  case ACLs of
-    null -> [];
-    Values ->
-      Tokenized = string:tokens(Values, ",{}"),
-      [create_acl(A) || A <- Tokenized]
-  end.

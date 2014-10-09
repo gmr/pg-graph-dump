@@ -3,6 +3,6 @@
   {vsn, "0.1.0"},
   {registered, []},
   {applications, [kernel, stdlib]},
-  {mod, [pg_graph_db, pg_graph_dump]},
+  {mod, [pg_graph_build, pg_graph_db, pg_graph_dump, pg_graph_util]},
   {env, []}
 ]}.
