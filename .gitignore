@@ -9,3 +9,6 @@ ebin
 .rebar
 pg_graph_dump
 .idea
+*.dot
+*.png
+*.dat
