@@ -14,13 +14,13 @@ save(Filename, Database, Graph) ->
   case file:open(Filename, [write]) of
     {ok, FileId} ->
       io:fwrite(FileId, "digraph ~s {~n", [Database]),
-      io:fwrite(FileId, "  node [fontname=Helvetica, fontsize=12, style=filled, shape=box, fillcolor=white, fontcolor=black];~n", []),
+      io:fwrite(FileId, "  node [fontname=Helvetica fontsize=12 style=filled shape=box fillcolor=white fontcolor=black];~n", []),
       io:fwrite(FileId, "  node [height=0.5 width=1 penwidth = 0.5];~n", []),
-      io:fwrite(FileId, "  ratio = auto;~n", []),
-      io:fwrite(FileId, "  outputorder = edgesfirst;~n", []),
-      io:fwrite(FileId, "  edge [penwidth = 0.5, arrowsize = 0.5];~n", []),
+      io:fwrite(FileId, "  edge [penwidth=0.5 arrowsize=0.5];~n", []),
+      io:fwrite(FileId, "  outputorder=edgesfirst;~n", []),
+      io:fwrite(FileId, "  overlap=false;~n", []),
       io:fwrite(FileId, "  ranksep=1.25; nodesep=1;~n", []),
-      io:fwrite(FileId, "  overlap = false;~n", []),
+      io:fwrite(FileId, "  ratio=auto;~n", []),
       lists:foreach(fun(Row) -> write_layout(FileId, Row) end, Lookup),
       io:fwrite(FileId, "~n", []),
       lists:foreach(fun(V) -> write_associations(FileId, Lookup, Graph, V) end, digraph:vertices(Graph)),
@@ -77,7 +77,7 @@ node_label(Node) ->
 
 node_style(Node) ->
   "label=\"" ++ node_label(Node) ++ "\", " ++ case Node of
-    {namespace, _} -> "fillcolor=\"#8bb8f9\", fontcolor=white";
+    {namespace, _} -> "fillcolor=\"#8bb8f9\" fontcolor=white";
     {role, _}      -> "fillcolor=\"#ffff8e\"";
     {table, _, _}  -> "fillcolor=\"#eeeeee\""
   end.
