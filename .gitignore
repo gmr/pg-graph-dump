@@ -8,3 +8,4 @@ ebin
 .concrete/DEV_MODE
 .rebar
 pg_graph_dump
+.idea
