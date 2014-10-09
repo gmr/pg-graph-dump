@@ -95,6 +95,11 @@ process(Opts) ->
                   graph=digraph:new(),
                   version=pg_graph_db:version(Conn)},
   State2 = pg_graph_db:build_graph(State1),
+
+  pg_graph_util:save_graph("Graph.dat", State2#state.graph),
+
+  pg_graph_dot:save("db.dot", DBName, State2#state.graph),
+
   io:format("Sorted: ~p~n", [digraph_utils:postorder(State2#state.graph)]).
 
 

@@ -16,6 +16,7 @@
 build_graph(State) ->
   State1 = State#state{roles=roles(State)},
   pg_graph_build:roles(State1#state.graph, State1#state.roles),
+
   State2 = State1#state{namespaces=namespaces(State1)},
   pg_graph_build:namespaces(State2#state.graph, State2#state.namespaces),
   State3 = State2#state{tables=tables(State2)},
@@ -33,6 +34,7 @@ version(Connection) ->
 %% -----------------------------------------------------------------------------
 %% Private Functions
 %% -----------------------------------------------------------------------------
+
 
 role({Name, SuperUser, Inherit, CreateRole, CreateDB, CatalogUpdate, CanLogin, Replication, ConnLimit, Password, ValidUntil, Config, Oid}) ->
   #pg_role{name=pg_graph_util:bin_to_list(Name),
@@ -58,8 +60,8 @@ role_name(Roles, Oid) ->
 
 
 role_sql(Version) ->
-  case semver:compare(Version, {semver, 9, 0, 0, undefined}) of
-    -1 -> "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcatupdate, rolcanlogin, rolconnlimit, rolpassword, rolvaliduntil, rolconfig, oid FROM pg_roles";
+  case semver:compare(Version, {semver, 9, 1, 0, undefined}) of
+    -1 -> "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcatupdate, rolcanlogin, 'f' as rolreplication, rolconnlimit, rolpassword, rolvaliduntil, rolconfig, oid FROM pg_roles";
     _ -> "SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb, rolcatupdate, rolcanlogin, rolreplication, rolconnlimit, rolpassword, rolvaliduntil, rolconfig, oid FROM pg_roles"
   end.
 
@@ -94,7 +96,7 @@ table(State, Namespace, {Name, Owner, ACL, Options, Oid}) ->
             namespace=Namespace#pg_namespace.name,
             owner=role_name(State#state.roles, binary_to_integer(Role)),
             acls=pg_graph_util:parse_acls(pg_graph_util:bin_to_list(ACL)),
-            options=pg_graph_util:bin_to_list(Options),
+            options=Options,
             oid=binary_to_integer(Oid)}.
 
 

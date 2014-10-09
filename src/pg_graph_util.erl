@@ -13,7 +13,32 @@
 %% API
 -export([bin_to_list/1,
          bool/1,
-         parse_acls/1]).
+         parse_acls/1,
+         load_graph/1,
+         save_graph/2]).
+
+
+load_graph(Filename) ->
+  {ok, [Data]} = file:consult(Filename),
+  deserialize(Data).
+
+
+deserialize({VL, EL, NL, B}) ->
+  Graph = {digraph, V, E, N, B} = case B of
+     true -> digraph:new();
+     false -> digraph:new([acyclic])
+  end,
+  ets:delete_all_objects(V),
+  ets:delete_all_objects(E),
+  ets:delete_all_objects(N),
+  ets:insert(V, VL),
+  ets:insert(E, EL),
+  ets:insert(N, NL),
+  Graph.
+
+
+save_graph(Filename, Graph) ->
+  file:write_file(Filename, io_lib:fwrite("~p.\n",[serialize(Graph)])).
 
 
 bin_to_list(Value) ->
@@ -68,3 +93,10 @@ parse_acls(ACLs) ->
       Tokenized = string:tokens(Values, ",{}"),
       [create_acl(A) || A <- Tokenized]
   end.
+
+
+serialize({digraph, V, E, N, B}) ->
+    {ets:tab2list(V),
+     ets:tab2list(E),
+     ets:tab2list(N),
+     B}.

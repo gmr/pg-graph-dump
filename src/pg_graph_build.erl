@@ -16,7 +16,7 @@
 
 
 namespace(Graph, Namespace) ->
-  digraph:add_vertex(Graph, {namespace, Namespace#pg_namespace.name}),
+  maybe_add_vertex(Graph, {namespace, Namespace#pg_namespace.name}),
   role_edge(Graph, {namespace, Namespace#pg_namespace.name}, Namespace#pg_namespace.owner),
   lists:foreach(fun(A) -> role_edge(Graph, {namespace, Namespace#pg_namespace.name}, A#pg_acl.role) end,
                 Namespace#pg_namespace.acls).
@@ -29,12 +29,16 @@ namespaces(Graph, Namespaces) ->
 role_edge(Graph, Edge, Role) ->
   case Role of
     null  -> ok;
-    Value -> digraph:add_edge(Graph, Edge, {role, Value})
+    Value ->
+      case lists:any(fun(V) -> V == {role, Value} end, edges(Graph, Edge)) of
+        true -> ok;
+        false -> maybe_add_edge(Graph, Edge, {role, Value})
+      end
   end.
 
 
 roles(Graph, Roles) ->
-  lists:foreach(fun(V) -> digraph:add_vertex(Graph, {role, V#pg_role.name}) end, Roles).
+  lists:foreach(fun(V) -> maybe_add_vertex(Graph, {role, V#pg_role.name}) end, Roles).
 
 
 tables(Graph, Tables) ->
@@ -42,14 +46,42 @@ tables(Graph, Tables) ->
 
 
 table(Graph, Table) ->
-  digraph:add_vertex(Graph, {table, Table#pg_table.namespace, Table#pg_table.name}),
-  digraph:add_edge(Graph,
-                   {table, Table#pg_table.namespace, Table#pg_table.name},
-                   {namespace, Table#pg_table.namespace}),
-  digraph:add_edge(Graph,
-                   {table, Table#pg_table.namespace, Table#pg_table.name},
-                   {role, Table#pg_table.owner}),
+  maybe_add_vertex(Graph, {table, Table#pg_table.namespace, Table#pg_table.name}),
+  maybe_add_edge(Graph,
+                 {table, Table#pg_table.namespace, Table#pg_table.name},
+                 {namespace, Table#pg_table.namespace}),
+  maybe_add_edge(Graph,
+                 {table, Table#pg_table.namespace, Table#pg_table.name},
+                 {role, Table#pg_table.owner}),
   lists:foreach(fun(A) -> role_edge(Graph,
                                     {table, Table#pg_table.namespace, Table#pg_table.name},
                                     A#pg_acl.role) end,
                 Table#pg_table.acls).
+
+
+
+maybe_add_edge(Graph, Vertex, Edge) ->
+  case Vertex == Edge of
+    true -> ok;
+    false ->
+      case lists:member(Edge, edges(Graph, Vertex)) of
+        true  -> ok;
+        false -> digraph:add_edge(Graph, Vertex, Edge)
+      end
+  end.
+
+
+maybe_add_vertex(Graph, Vertex) ->
+  case lists:member(Vertex, digraph:vertices(Graph)) of
+    true -> ok;
+    false -> digraph:add_vertex(Graph, Vertex)
+  end.
+
+
+edge_vertex({_, _, Vertex, _}) ->
+  Vertex.
+
+
+edges(Graph, Vertex) ->
+  Edges = digraph:edges(Graph, Vertex),
+  [edge_vertex(digraph:edge(Graph, Edge)) || Edge <- Edges].
