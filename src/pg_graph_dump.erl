@@ -17,6 +17,8 @@
          {username,      $U, "username",     {list, os:getenv("USER")}, "connect as specified database user"},
          {no_pwd_prompt, $w, "no-password",  boolean,                   "never prompt for password"},
          {pwd_prompt,    $W, "password",     boolean,                   "force password prompt (should happen automatically)"},
+         {save_graph,    $s, "save-graph",   boolean,                   "save the object graph to a file"},
+         {dot,           $D, "dot",          boolean,                   "write the object graph out as a dot file"},
          {help,          $h, "help",         boolean,                   "display this help and exit"}]).
 
 
@@ -84,38 +86,55 @@ process(Opts) ->
   User = proplists:get_value(username, Opts),
 
   %% Connect to PostgreSQL, if the connection fails, the app exits prior to return
-  Conn = case proplists:get_bool(pwd_prompt, Opts) of
-    true  ->
-      connect(Host, Port, DBName, User, get_password());
-    false ->
-      connect(Host, Port, DBName, User, proplists:get_bool(no_pwd_prompt, Opts))
-  end,
+  Conn = connect(Host, Port, DBName, User,
+                 get_password(Host, Port, DBName, User,
+                              proplists:get_bool(pwd_prompt, Opts))),
 
   State1 = #state{connection=Conn,
                   graph=digraph:new(),
                   version=pg_graph_db:version(Conn)},
   State2 = pg_graph_db:build_graph(State1),
 
-  pg_graph_util:save_graph("Graph.dat", State2#state.graph),
+  case proplists:get_value(dot, Opts) of
+    true -> pg_graph_util:save_graph("db.graph", State2#state.graph);
+    _    -> ok
+  end,
 
-  pg_graph_dot:save("db.dot", DBName, State2#state.graph),
+  case proplists:get_value(dot, Opts) of
+    true -> pg_graph_dot:save("db.dot", DBName, State2#state.graph);
+    _    -> ok
+  end,
 
   io:format("Sorted: ~p~n", [digraph_utils:postorder(State2#state.graph)]).
 
 
 %% @private
-%% @spec get_password -> list()
-%% @doc Propmpt the user for their password
+%% @spec get_password(Host, Port, DBName, User, NoPrompt) -> list()
+%% @where
+%%       Host     = list()
+%%       Port     = integer()
+%%       DBName   = list()
+%%       User     = list()
+%%       NoPrompt = boolean()
+%% @doc Check to see if the password is set in pgpass or prompt the user
 %% @todo This currently echos the password to stdout, bad.
 %% @end
 %%
-get_password() ->
-  %% This fails
-  %%ok = io:setopts([{echo, false}]),
-  Value = io:get_line("Password: "),
-  %%ok = io:setopts([{echo, true}]),
-  io:format("~n"),
-  string:strip(string:strip(Value, both, 13), both, 10).
+get_password(Host, Port, DBName, User, NoPrompt) ->
+  case pg_graph_pgpass:get_password(Host, Port, DBName, User) of
+    none ->
+      case NoPrompt of
+        false ->
+          %% This fails
+          %%ok = io:setopts([{echo, false}]),
+          Value = io:get_line("Password: "),
+          %%ok = io:setopts([{echo, true}]),
+          io:format("~n"),
+          string:strip(string:strip(Value, both, 13), both, 10);
+        _ -> []
+      end;
+    Password -> Password
+  end.
 
 
 %% @private
@@ -137,7 +156,8 @@ connect(Host, Port, DBName, User, NoPrompt) when is_boolean(NoPrompt) ->
     {error, invalid_authorization_specification} ->
         case NoPrompt of
           true  -> on_error(invalid_authorization_specification);
-          false -> connect(Host, Port, DBName, User, get_password())
+          false -> connect(Host, Port, DBName, User,
+                           get_password(Host, Port, DBName, User, NoPrompt))
         end;
     {error, Error} -> on_error(Error)
   end;
