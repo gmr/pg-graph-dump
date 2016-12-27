@@ -12,3 +12,4 @@ pg_graph_dump
 *.dot
 *.png
 *.dat
+_build

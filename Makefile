@@ -1,8 +1,5 @@
 all:
-	rebar compile && rebar escriptize
+	rebar3 compile && rebar3 escriptize
 
 clean:
-	rebar clean
-
-get-deps:
-	rebar get-deps
+	rebar3 clean
