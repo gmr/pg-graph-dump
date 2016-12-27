@@ -15,6 +15,7 @@
          {host,          $h, "host",         {list, "localhost"},       "database server host"},
          {port,          $p, "port",         {integer, 5432},           "database server port number"},
          {username,      $U, "username",     {list, os:getenv("USER")}, "connect as specified database user"},
+         {role,          $r, "role",         list,                      "specify the role to set upon connection"},
          {no_pwd_prompt, $w, "no-password",  boolean,                   "never prompt for password"},
          {pwd_prompt,    $W, "password",     boolean,                   "force password prompt (should happen automatically)"},
          {save_graph,    $s, "save-graph",   boolean,                   "save the object graph to a file"},
@@ -84,15 +85,19 @@ process(Opts) ->
   Port = proplists:get_value(port, Opts),
   DBName = proplists:get_value(dbname, Opts),
   User = proplists:get_value(username, Opts),
+  Role = proplists:get_value(role, Opts),
 
   %% Connect to PostgreSQL, if the connection fails, the app exits prior to return
   Conn = connect(Host, Port, DBName, User,
                  get_password(Host, Port, DBName, User,
                               proplists:get_bool(pwd_prompt, Opts))),
 
+  ok = maybe_set_role(Conn, Role),
+
   State1 = #state{connection=Conn,
                   graph=digraph:new(),
                   version=pg_graph_db:version(Conn)},
+
   State2 = pg_graph_db:build_graph(State1),
 
   case proplists:get_value(dot, Opts) of
@@ -107,6 +112,16 @@ process(Opts) ->
 
   io:format("Sorted: ~p~n", [digraph_utils:postorder(State2#state.graph)]).
 
+
+maybe_set_role(_Conn, undefined) -> ok;
+maybe_set_role(Conn, Role) ->
+  io:format("Setting role to ~s~n", [Role]),
+  case pgsql:squery(Conn, lists:flatten(lists:merge(["SET role="], [Role]))) of
+    {ok, _, _} -> ok;
+  {error, Error} ->
+    io:format("Error: " ++ atom_to_list(Error) ++ "~n"),
+    error
+  end.
 
 %% @private
 %% @spec get_password(Host, Port, DBName, User, NoPrompt) -> list()
