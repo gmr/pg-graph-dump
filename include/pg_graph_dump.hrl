@@ -4,7 +4,7 @@
 %% @end
 %%=============================================================================
 
--include_lib("deps/epgsql/include/pgsql.hrl").
+-include_lib("epgsql/include/pgsql.hrl").
 
 
 -record(state, {connection, graph, version, roles, namespaces, tables}).
